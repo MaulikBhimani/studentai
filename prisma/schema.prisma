@@ -1,0 +1,49 @@
+datasource db {
+  provider = "mongodb"
+  url      = env("MONGODB_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model PortalSession {
+  id        String    @id @default(auto()) @map("_id") @db.ObjectId
+  deviceId  String
+  portalUrl String
+  subjects  Subject[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@unique([deviceId, portalUrl])
+}
+
+model Subject {
+  id              String         @id @default(auto()) @map("_id") @db.ObjectId
+  name            String
+  portalSessionId String         @db.ObjectId
+  portalSession   PortalSession  @relation(fields: [portalSessionId], references: [id], onDelete: Cascade)
+  files           PortalFile[]
+  assignments     Assignment[]
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+}
+
+model PortalFile {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  url       String
+  date      String?
+  subjectId String   @db.ObjectId
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
+
+model Assignment {
+  id        String   @id @default(auto()) @map("_id") @db.ObjectId
+  title     String
+  dueDate   String?
+  subjectId String   @db.ObjectId
+  subject   Subject  @relation(fields: [subjectId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+}
