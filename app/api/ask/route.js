@@ -17,6 +17,8 @@ export async function POST(req) {
       return NextResponse.json({ error: 'Missing question or portalUrl' }, { status: 400 });
     }
 
+    console.log('Ask API: Fetching data for deviceId:', deviceId, 'portalUrl:', portalUrl);
+
     // Fetch the user's dataset for this portal using composite unique key
     const sessionData = await prisma.portalSession.findUnique({
       where: {
@@ -33,18 +35,34 @@ export async function POST(req) {
     });
 
     if (!sessionData) {
-      return NextResponse.json({ error: 'No data found for this portal with your device ID.' });
+      console.log('Ask API: No data found for this portal');
+      return NextResponse.json({ 
+        error: 'No data found for this portal. Please visit your portal pages first to extract data.' 
+      }, { status: 404 });
     }
+
+    if (!sessionData.subjects || sessionData.subjects.length === 0) {
+      return NextResponse.json({ 
+        error: 'No subjects found. Please visit course pages with files and assignments.' 
+      }, { status: 404 });
+    }
+
+    console.log('Ask API: Found', sessionData.subjects.length, 'subjects');
 
     // Build context
     const context = buildContextString(sessionData);
+    console.log('Ask API: Context built, length:', context.length);
 
     // Call Gemini
     const answer = await askGemini(question, context);
+    console.log('Ask API: Answer received from Gemini');
 
     return NextResponse.json({ success: true, answer: answer });
   } catch (error) {
     console.error('Ask API error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ 
+      error: 'Internal Server Error', 
+      details: error.message 
+    }, { status: 500 });
   }
 }
