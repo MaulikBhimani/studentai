@@ -13,15 +13,19 @@ export async function POST(req) {
     const { portalUrl, subjects } = data;
 
     if (!portalUrl || !subjects) {
-      return NextResponse.json({ error: 'Missing Data' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing portalUrl or subjects' }, { status: 400 });
     }
 
-    // Upsert portal session using unique composite key [deviceId, portalUrl] if relying on it,
-    // or we can search for the existing record and update it safely using Prisma.
-    // However, Prisma upsert relies on a unique field or composite field.
-    // The schema has @@unique([deviceId, portalUrl]).
-    
-    // Check if the unique identifier works
+    if (!Array.isArray(subjects)) {
+      return NextResponse.json({ error: 'subjects must be an array' }, { status: 400 });
+    }
+
+    // Check if subjects array is empty
+    if (subjects.length === 0) {
+      return NextResponse.json({ success: true, message: 'No subjects to ingest' });
+    }
+
+    // Find or create portal session
     let portalSession = await prisma.portalSession.findUnique({
       where: {
         deviceId_portalUrl: {
@@ -40,27 +44,30 @@ export async function POST(req) {
       });
     }
 
-    // We drop existing subjects for this session and insert fresh ones.
+    // Delete existing subjects for this session
     await prisma.subject.deleteMany({
       where: { portalSessionId: portalSession.id }
     });
 
+    // Insert new subjects
     for (const sub of subjects) {
+      if (!sub.name) continue; // Skip subjects without names
+      
       await prisma.subject.create({
         data: {
           name: sub.name,
           portalSessionId: portalSession.id,
           files: {
-            create: sub.files.map(f => ({
-              title: f.title,
-              url: f.url,
-              date: f.date
+            create: (sub.files || []).map(f => ({
+              title: f.title || 'Untitled',
+              url: f.url || '',
+              date: f.date || null
             }))
           },
           assignments: {
-            create: sub.assignments.map(a => ({
-              title: a.title,
-              dueDate: a.dueDate
+            create: (sub.assignments || []).map(a => ({
+              title: a.title || 'Untitled Assignment',
+              dueDate: a.dueDate || null
             }))
           }
         }
@@ -70,6 +77,6 @@ export async function POST(req) {
     return NextResponse.json({ success: true, message: 'Data ingested successfully.' });
   } catch (error) {
     console.error('Ingest error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return NextResponse.json({ error: 'Internal Server Error', details: error.message }, { status: 500 });
   }
 }
